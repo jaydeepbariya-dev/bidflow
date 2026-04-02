@@ -63,9 +63,9 @@ public class AuthService {
             throw new InvalidCredentialsException("INVALID_CREDENTIALS");
         }
 
-        String accessToken = jwtUtil.generateToken(loginRequestDTO.getEmail(), user.getRole().toString());
+        String accessToken = jwtUtil.generateToken(user.getId().toString(), loginRequestDTO.getEmail(), user.getRole().toString());
 
-        return new LoginResponseDTO(accessToken, user.getRole().toString());
+        return new LoginResponseDTO(accessToken, user.getRole().toString(), user.getId().toString());
 
     }
 

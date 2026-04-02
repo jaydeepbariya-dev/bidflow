@@ -3,10 +3,12 @@ package com.bidflow.userservice.dto;
 public class LoginResponseDTO {
     private String token;
     private String role;
+    private String userId;
 
-    public LoginResponseDTO(String token, String role) {
+    public LoginResponseDTO(String token, String role, String userId) {
         this.token = token;
         this.role = role;
+        this.userId = userId;
     }
 
     public String getToken() {
@@ -23,6 +25,14 @@ public class LoginResponseDTO {
 
     public void setRole(String role) {
         this.role = role;
+    }
+
+    public String getUserId() {
+        return userId;
+    }
+
+    public void setUserId(String userId) {
+        this.userId = userId;
     }
 
 }
