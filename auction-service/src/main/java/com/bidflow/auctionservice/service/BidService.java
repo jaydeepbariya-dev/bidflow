@@ -6,6 +6,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 
 import com.bidflow.auctionservice.dto.BidRequestDTO;
@@ -15,16 +16,20 @@ import com.bidflow.auctionservice.entity.Bid;
 import com.bidflow.auctionservice.repository.AuctionRepository;
 import com.bidflow.auctionservice.repository.BidRepository;
 import com.bidflow.auctionservice.util.AuctionStatus;
+import com.bidflow.auctionservice.util.RedisUtil;
 
 @Service
 public class BidService {
 
     private final BidRepository bidRepository;
     private final AuctionRepository auctionRepository;
+    private final RedisTemplate<String, Object> redisTemplate;
 
-    public BidService(BidRepository bidRepository, AuctionRepository auctionRepository) {
+    public BidService(BidRepository bidRepository, AuctionRepository auctionRepository,
+            RedisTemplate<String, Object> redisTemplate) {
         this.bidRepository = bidRepository;
         this.auctionRepository = auctionRepository;
+        this.redisTemplate = redisTemplate;
     }
 
     public BidResponseDTO placeBid(String auctionId, BidRequestDTO dto) {
@@ -36,13 +41,19 @@ public class BidService {
             throw new RuntimeException("AUCTION_NOT_ACTIVE");
         }
 
-        Double highestBid = bidRepository
-                .findTopByAuctionIdOrderByAmountDesc(UUID.fromString(auctionId))
-                .map(Bid::getAmount)
-                .orElse(0.0);
+        String key = RedisUtil.getHighestBidKey(auctionId);
 
-        if (dto.getAmount() <= highestBid) {
-            throw new RuntimeException("BID_TOO_LOW");
+        Object cachedValue = redisTemplate.opsForValue().get(key);
+
+        Double highestBid;
+
+        if (cachedValue != null) {
+            highestBid = Double.valueOf(cachedValue.toString());
+        } else {
+            highestBid = bidRepository.findTopByAuctionIdOrderByAmountDesc(UUID.fromString(auctionId))
+                    .map(Bid::getAmount).orElse(0.0);
+
+            redisTemplate.opsForValue().set(key, highestBid.toString());
         }
 
         Bid bid = new Bid();
@@ -51,6 +62,8 @@ public class BidService {
         bid.setAmount(dto.getAmount());
 
         Bid saved = bidRepository.save(bid);
+
+        redisTemplate.opsForValue().set(key, dto.getAmount().toString());
 
         BidResponseDTO res = new BidResponseDTO();
         res.setId(saved.getId().toString());
