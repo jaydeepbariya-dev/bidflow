@@ -1,4 +1,5 @@
 services:
+
   redis:
     image: redis:7-alpine
     container_name: redis-server
@@ -7,6 +8,109 @@ services:
     volumes:
       - redis-data:/data
     restart: unless-stopped
+    networks:
+      - internal
+
+  kafka-broker:
+    image: apache/kafka:latest
+    container_name: kafka-broker
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka-broker:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka-broker:9093
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LOG_DIRS: /tmp/kraft-combined-logs
+    networks:
+      - internal
+
+  user-service-db:
+    image: postgres:15
+    container_name: user-service-db
+    ports:
+      - "8084:5432"
+    environment:
+      POSTGRES_DB: usersdb
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - /Users/jaydeepbariya/data/usersdb:/var/lib/postgresql/data
+    networks:
+      - internal
+
+  auction-service-db:
+    image: postgres:15
+    container_name: auction-service-db
+    ports:
+      - "8085:5432"
+    environment:
+      POSTGRES_DB: auctionsdb
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - /Users/jaydeepbariya/data/auctionsdb:/var/lib/postgresql/data
+    networks:
+      - internal
+
+  user-service:
+    build: ./user-service
+    container_name: user-service
+    ports:
+      - "8081:8081"
+    depends_on:
+      - user-service-db
+    environment:
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update
+      SPRING_SQL_INIT_MODE: always
+      SPRING_DATASOURCE_URL: jdbc:postgresql://user-service-db:5432/usersdb
+      SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: postgres
+      JWT_SECRET: AAIyBcRehiycDcyRBZKVenxLOCBk6yCSQpH1fBNhtp3
+    networks:
+      - internal
+
+  auction-service:
+    build: ./auction-service
+    container_name: auction-service
+    ports:
+      - "8082:8082"
+    depends_on:
+      - auction-service-db
+    environment:
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update
+      SPRING_SQL_INIT_MODE: always
+      SPRING_DATASOURCE_URL: jdbc:postgresql://auction-service-db:5432/auctionsdb
+      SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: postgres
+      JWT_SECRET: AAIyBcRehiycDcyRBZKVenxLOCBk6yCSQpH1fBNhtp3
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+      SPRING_KAFKA_BOOTSTRAP-SERVERS: kafka-broker:9092
+      SPRING_KAFKA_PRODUCER_KEY-SERIALIZER: org.apache.kafka.common.serialization.StringSerializer
+      SPRING_KAFKA_PRODUCER_VALUE-SERIALIZER: org.springframework.kafka.support.serializer.JsonSerializer
+
+    networks:
+      - internal
+
+  notification-service:
+    build: ./notification-service
+    container_name: notification-service
+    ports:
+      - "8083:8083"
+    depends_on:
+      - kafka-broker
+    environment:
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka-broker:9092
+      SPRING_KAFKA_CONSUMER_GROUP_ID: notification-group
+      SPRING_KAFKA_CONSUMER_AUTO_OFFSET_RESET: earliest
+      SPRING_KAFKA_CONSUMER_VALUE_DESERIALIZER: org.springframework.kafka.support.serializer.JsonDeserializer
+      SPRING_KAFKA_CONSUMER_PROPERTIES_SPRING_JSON_TRUSTED_PACKAGES: "*"
     networks:
       - internal
 

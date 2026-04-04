@@ -7,12 +7,14 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 
 import com.bidflow.auctionservice.dto.BidRequestDTO;
 import com.bidflow.auctionservice.dto.BidResponseDTO;
 import com.bidflow.auctionservice.entity.Auction;
 import com.bidflow.auctionservice.entity.Bid;
+import com.bidflow.auctionservice.event.BidEvent;
 import com.bidflow.auctionservice.repository.AuctionRepository;
 import com.bidflow.auctionservice.repository.BidRepository;
 import com.bidflow.auctionservice.util.AuctionStatus;
@@ -24,12 +26,14 @@ public class BidService {
     private final BidRepository bidRepository;
     private final AuctionRepository auctionRepository;
     private final RedisTemplate<String, Object> redisTemplate;
+    private final KafkaTemplate<String, Object> kafkaTemplate;
 
     public BidService(BidRepository bidRepository, AuctionRepository auctionRepository,
-            RedisTemplate<String, Object> redisTemplate) {
+            RedisTemplate<String, Object> redisTemplate, KafkaTemplate<String, Object> kafkaTemplate) {
         this.bidRepository = bidRepository;
         this.auctionRepository = auctionRepository;
         this.redisTemplate = redisTemplate;
+        this.kafkaTemplate = kafkaTemplate;
     }
 
     public BidResponseDTO placeBid(String auctionId, BidRequestDTO dto) {
@@ -64,6 +68,12 @@ public class BidService {
         Bid saved = bidRepository.save(bid);
 
         redisTemplate.opsForValue().set(key, dto.getAmount().toString());
+
+        BidEvent bidEvent = new BidEvent();
+        bidEvent.setAmount(saved.getAmount());
+        bidEvent.setAuctionId(saved.getAuctionId().toString());
+        bidEvent.setUserId(saved.getUserId().toString());
+        kafkaTemplate.send("bid-events", bidEvent);
 
         BidResponseDTO res = new BidResponseDTO();
         res.setId(saved.getId().toString());
