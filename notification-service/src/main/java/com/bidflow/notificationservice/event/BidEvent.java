@@ -1,5 +1,6 @@
 package com.bidflow.notificationservice.event;
 
+
 public class BidEvent {
     private String auctionId;
     private String userId;

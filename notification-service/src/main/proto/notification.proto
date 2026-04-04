@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+service NotificationService {
+    rpc sendBidNotification(BidRequest) returns (AckResponse);
+}
+
+message BidRequest{
+    string auctionId = 1;
+    string userId = 2;
+    string amount = 3;
+}
+
+message AckResponse{
+    string message = 1;
+}
